@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>WebMarket</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{background:#0a0a0a; color:#fff; font-family:Arial; margin:0}
+header{background:#111; padding:15px; border-bottom:2px solid #25D366; display:flex; justify-content:space-between; align-items:center}
+header h1{color:#25D366; margin:0}
+.wrap{max-width:900px; margin:20px auto; padding:0 15px}
+.box{background:#161616; padding:20px; border-radius:10px; margin:15px 0}
+input,button,textarea{width:100%; padding:12px; margin:6px 0; background:#1a1a1a; border:1px solid #333; border-radius:6px; color:#fff; box-sizing:border-box}
+button{background:#25D366; border:0; font-weight:bold; cursor:pointer}
+.plan{background:#222; padding:15px; margin:10px 0; border-radius:8px; border:1px solid #333; display:flex; justify-content:space-between}
+.timer{color:#ffaa00; font-size:20px; font-weight:bold}
+#home,#plans,#postForm{display:none}
+.card{background:#161616; padding:15px; margin:12px 0; border-radius:8px}
+.price{color:#25D366; font-size:18px; font-weight:bold}
+a{color:#25D366}
+</style>
+</head>
+<body>
+<header>
+  <h1>WebMarket</h1>
+  <div id="userInfo"></div>
+</header>
+
+<div class="wrap">
+  <div id="login" class="box">
+    <h2>Login</h2>
+    <input id="email" placeholder="Email">
+    <input id="phrase" placeholder="3 Word Phrase: red car fast">
+    <button onclick="login()">Enter</button>
+  </div>
+
+  <div id="home">
+    <div class="box">
+      <h3>Your Account</h3>
+      <p><b>Seller ID:</b> <span id="sellerID"></span></p>
+      <p><b>Status:</b> <span id="status"></span></p>
+      <p><b>Time Left:</b> <span class="timer" id="timer"></span></p>
+      <button onclick="showPlans()">Upgrade Plan</button>
+      <button onclick="showPost()">Post Website</button>
+      <button onclick="logout()" style="background:#444">Logout</button>
+    </div>
+  </div>
+
+  <div id="plans" class="box">
+    <h3>Choose Plan</h3>
+    <div class="plan"><div><b>$10</b> / 1 Month</div> <button onclick="pay('10','1m')">Activate</button></div>
+    <div class="plan"><div><b>$25</b> / 3 Months</div> <button onclick="pay('25','3m')">Activate</button></div>
+    <div class="plan"><div><b>$35</b> / 5 Months</div> <button onclick="pay('35','5m')">Activate</button></div>
+    <div class="plan"><div><b>$65</b> / 1 Year</div> <button onclick="pay('65','1y')">Activate</button></div>
+    <div id="payBox"></div>
+    <button onclick="hidePlans()" style="background:#444">Back</button>
+  </div>
+
+  <div id="postForm" class="box">
+    <h3>Post Website</h3>
+    <form onsubmit="postItem(event)">
+      <input name="name" placeholder="Website Name" required>
+      <textarea name="desc" placeholder="Description"></textarea>
+      <input name="price" placeholder="Price USD">
+      <input name="region" placeholder="Region/Country Targeted">
+      <input name="email" placeholder="Contact Email">
+      <input name="whatsapp" placeholder="WhatsApp">
+      <input name="telegram" placeholder="Telegram">
+      <button>Submit for Approval</button>
+    </form>
+    <button onclick="hidePost()" style="background:#444">Back</button>
+  </div>
+
+  <h3>Marketplace</h3>
+  <div id="list">Loading...</div>
+</div>
+
+<script>
+const API = "https://YOUR-RENDER-BACKEND.onrender.com"; // CHANGE THIS
+const WALLET = "TQn9YOURUSDTWALLETHERE"; // CHANGE THIS
+let user = {};
+
+async function login(){
+  let res = await fetch(API+"/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+    email:email.value, phrase:phrase.value
+  })});
+  user = await res.json();
+  if(user.error) return alert(user.error);
+  localStorage.u = JSON.stringify(user);
+  loadUser();
+}
+
+async function loadUser(){
+  let res = await fetch(API+"/api/user?email="+user.email);
+  user = await res.json();
+  login.style.display="none";
+  home.style.display="block";
+  sellerID.innerText = user.sellerId;
+  status.innerText = user.status;
+  userInfo.innerHTML = `Hi ${user.email}`;
+  startTimer(user.planEnd);
+  loadListings();
+}
+
+function startTimer(end){
+  setInterval(()=>{
+    let left = end - Date.now();
+    if(left<=0){timer.innerText="EXPIRED"; return}
+    let d = Math.floor(left/86400000);
+    let h = Math.floor((left%86400000)/3600000);
+    timer.innerText = `${d}d ${h}h`;
+  },1000)
+}
+
+function showPlans(){plans.style.display="block"}
+function hidePlans(){plans.style.display="none"}
+function showPost(){postForm.style.display="block"}
+function hidePost(){postForm.style.display="none"}
+function logout(){localStorage.clear(); location.reload()}
+
+function pay(amount, duration){
+  payBox.innerHTML = `
+    <div class="box" style="background:#111">
+      <h4>Pay $${amount} USDT TRC20 to:</h4>
+      <p style="word-break:break-all; color:#25D366">${WALLET}</p>
+      <input id="txid" placeholder="Paste TxID after payment">
+      <button onclick="submitTx('${amount}','${duration}')">I Paid - Verify</button>
+    </div>
+  `;
+}
+
+async function submitTx(amount, duration){
+  await fetch(API+"/api/payment", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+    email:user.email, sellerId:user.sellerId, txid:txid.value, amount:"$"+amount, duration
+  })});
+  alert("Payment submitted. You will get access after I approve it.");
+  payBox.innerHTML = "";
+}
+
+async function postItem(e){
+  e.preventDefault();
+  let d=Object.fromEntries(new FormData(e.target));
+  d.sellerEmail=user.email; d.sellerId=user.sellerId;
+  let res = await fetch(API+"/api/post", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(d)});
+  let data = await res.json();
+  if(data.error) return alert(data.error);
+  alert("Submitted. Waiting for admin approval");
+  e.target.reset();
+}
+
+async function loadListings(){
+  let res = await fetch(API+"/api/listings");
+  let data = await res.json();
+  list.innerHTML = data.map(x=>`
+    <div class="card">
+      <h3>${x.name}</h3>
+      <p>${x.desc}</p>
+      <p>${x.region}</p>
+      <p class="price">${x.price}</p>
+      <a href="mailto:${x.email}">Email</a>
+      <a href="https://wa.me/${x.whatsapp}" target="_blank">WhatsApp</a>
+      <a href="https://t.me/${x.telegram.replace('@','')}" target="_blank">Telegram</a>
+    </div>
+  `).join('') || "No listings yet";
+}
+
+if(localStorage.u){user=JSON.parse(localStorage.u); loadUser()}
+</script>
+</body>
+</html>
