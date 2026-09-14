@@ -97,8 +97,7 @@ async function loadPayments(){
 async function approvePayment(email, duration){
   if(!confirm(`Approve ${email} for ${duration}?`)) return;
   await fetch(API+"/api/admin/approve", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
+    method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({email, duration, adminPass:pass})
   });
   alert("Approved! Email sent to seller.");
@@ -109,8 +108,7 @@ async function rejectPayment(email){
   let reason = prompt("Reason for rejection:", "TxID not found");
   if(reason==null) return;
   await fetch(API+"/api/admin/reject", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
+    method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({email, reason, adminPass:pass})
   });
   alert("Rejected! Email sent to seller.");
@@ -129,13 +127,13 @@ async function loadListings(){
         <tr>
           <td>${new Date(l.createdAt).toLocaleString()}</td>
           <td>${l.sellerId}<br><small>${l.sellerEmail}</small></td>
-          <td><b>${l.name}</b><br><small>${l.desc}</small></td>
+          <td><b>${l.name}</b><br><small>${l.description}</small></td>
           <td>${l.price}</td>
           <td>${l.region}</td>
           <td>Email: ${l.email}<br>WA: ${l.whatsapp}<br>TG: ${l.telegram}</td>
           <td>
-            <button onclick="approveListing('${l._id}')">Approve</button>
-            <button class="danger" onclick="rejectListing('${l._id}')">Reject</button>
+            <button onclick="approveListing(${l.id})">Approve</button>
+            <button class="danger" onclick="rejectListing(${l.id})">Reject</button>
           </td>
         </tr>
       `).join('')}
@@ -145,8 +143,7 @@ async function loadListings(){
 
 async function approveListing(id){
   await fetch(API+"/api/admin/approveListing", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
+    method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({id, adminPass:pass})
   });
   alert("Listing Approved! Email sent to seller.");
@@ -157,8 +154,7 @@ async function rejectListing(id){
   let reason = prompt("Reason for rejection:", "Spam / Wrong category");
   if(reason==null) return;
   await fetch(API+"/api/admin/rejectListing", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
+    method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({id, reason, adminPass:pass})
   });
   alert("Listing Rejected! Email sent to seller.");
