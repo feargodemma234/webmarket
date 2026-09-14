@@ -38,30 +38,34 @@
 </div>
 
 <script>
-const API = "YOUR-RENDER-URL"; // <-- CHANGE TO https://webmarket-1.onrender.com
+const API = "https://webmarket-2.onrender.com"; // FIXED
 
 // Load wallet
 fetch(API + '/api/health').then(res => res.json()).then(data => {
   document.getElementById('walletTop').innerText = data.wallet || 'Set WALLET in Render';
-});
+}).catch(()=>{document.getElementById('walletTop').innerText = 'API Offline'});
 
 // Load products
 async function loadProducts(){
-  const res = await fetch(API + '/api/products');
-  const products = await res.json();
-  if(products.length === 0){
-    document.getElementById('products').innerHTML = '<p>No products yet. <a href="/submit.html">Be the first to sell!</a></p>';
-    return;
+  try{
+    const res = await fetch(API + '/api/products');
+    const products = await res.json();
+    if(products.length === 0){
+      document.getElementById('products').innerHTML = '<p>No products yet. <a href="/submit.html">Be the first to sell!</a></p>';
+      return;
+    }
+    document.getElementById('products').innerHTML = products.map(p => `
+      <div class="card">
+        <h3>${p.product_name}</h3>
+        <p>${p.description}</p>
+        <p class="price">$${p.price} USDT</p>
+        <p><b>Seller:</b> ${p.seller_email}</p>
+        <a href="mailto:${p.seller_email}?subject=Interested in ${p.product_name}" class="btn">Contact Seller</a>
+      </div>
+    `).join('');
+  }catch(e){
+    document.getElementById('products').innerHTML = '<p style="color:red">Error loading products. Check Render logs.</p>'
   }
-  document.getElementById('products').innerHTML = products.map(p => `
-    <div class="card">
-      <h3>${p.product_name}</h3>
-      <p>${p.description}</p>
-      <p class="price">$${p.price} USDT</p>
-      <p><b>Seller:</b> ${p.seller_email}</p>
-      <a href="mailto:${p.seller_email}?subject=Interested in ${p.product_name}" class="btn">Contact Seller</a>
-    </div>
-  `).join('');
 }
 loadProducts();
 </script>
