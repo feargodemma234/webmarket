@@ -3,18 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebMarket - Buy Products</title>
+<title>WebMarket - Buy Products with USDT</title>
 <style>
   body{font-family:Arial;margin:0;background:#f4f4f4}
   header{background:#28a745;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center}
   header a{color:#fff;margin:0 10px;text-decoration:none;font-weight:bold}
-  .container{max-width:1200px;margin:20px auto;padding:20px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:20px}
-  .card{background:#fff;padding:15px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-  .card h3{margin:0 0 10px;color:#28a745}
-  .price{font-size:22px;font-weight:bold;color:#000}
-  .btn{display:block;text-align:center;background:#28a745;color:#fff;padding:10px;border-radius:5px;text-decoration:none;margin-top:10px}
-  .btn:hover{background:#218838}
+ .notice{background:#fff3cd;padding:10px;text-align:center;font-size:13px;border-bottom:2px solid #ffc107}
+ .chain{color:#dc3545;font-weight:bold}
+ .container{max-width:1200px;margin:20px auto;padding:20px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:20px}
+ .card{background:#fff;padding:15px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+ .card h3{margin:0 0 10px;color:#28a745}
+ .price{font-size:22px;font-weight:bold;color:#000}
+ .btn{display:block;text-align:center;background:#28a745;color:#fff;padding:10px;border-radius:5px;text-decoration:none;margin-top:10px}
+  #walletTop{font-family:monospace;font-size:12px}
 </style>
 </head>
 <body>
@@ -26,29 +28,36 @@
     <a href="/admin.html">Admin</a>
   </nav>
 </header>
+<div class="notice">
+  <b>Platform Fee:</b> Pay in <span class="chain">USDT TRON [TRC20]</span> only to: <span id="walletTop">Loading...</span>
+</div>
 
 <div class="container">
-  <h2>Latest Products</h2>
+  <h2>Latest Approved Products</h2>
   <div class="grid" id="products">Loading...</div>
 </div>
 
 <script>
-const API = "YOUR-RENDER-URL"; // <-- CHANGE THIS TO https://webmarket-1.onrender.com
+const API = "YOUR-RENDER-URL"; // <-- CHANGE TO https://webmarket-1.onrender.com
 
+// Load wallet
+fetch(API + '/api/health').then(res => res.json()).then(data => {
+  document.getElementById('walletTop').innerText = data.wallet || 'Set WALLET in Render';
+});
+
+// Load products
 async function loadProducts(){
   const res = await fetch(API + '/api/products');
   const products = await res.json();
-  
   if(products.length === 0){
     document.getElementById('products').innerHTML = '<p>No products yet. <a href="/submit.html">Be the first to sell!</a></p>';
     return;
   }
-  
   document.getElementById('products').innerHTML = products.map(p => `
     <div class="card">
       <h3>${p.product_name}</h3>
       <p>${p.description}</p>
-      <p class="price">$${p.price}</p>
+      <p class="price">$${p.price} USDT</p>
       <p><b>Seller:</b> ${p.seller_email}</p>
       <a href="mailto:${p.seller_email}?subject=Interested in ${p.product_name}" class="btn">Contact Seller</a>
     </div>
