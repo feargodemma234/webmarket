@@ -1,12 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>WebMarket Admin</title>
-<style>body{font-family:Arial;margin:0;background:#f4f4f4}header{background:#dc3545;color:#fff;padding:15px}.container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:10px}button{padding:10px;cursor:pointer;font-weight:bold}.approve{background:#28a745;color:#fff;border:none}.reject{background:#dc3545;color:#fff;border:none}.product{border:1px solid #ddd;padding:15px;margin:10px 0}</style>
+<head>
+<meta charset="UTF-8">
+<title>WebMarket Admin</title>
+<style>
+  body{font-family:Arial;margin:0;background:#f4f4f4}
+  header{background:#dc3545;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center}
+ .container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:10px}
+  button{padding:10px 15px;cursor:pointer;font-weight:bold;border:none;border-radius:5px}
+ .approve{background:#28a745;color:#fff}
+ .reject{background:#dc3545;color:#fff}
+ .product{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:5px}
+ .logout{background:#6c757d;color:#fff}
+</style>
 </head>
 <body>
-<header><h2>WebMarket Admin Panel</h2></header>
+<header>
+  <h2>WebMarket Admin Panel</h2>
+  <button class="logout" onclick="logout()">Logout</button>
+</header>
+
 <div class="container" id="panel">
-  <button onclick="logout()">Logout</button>
   <h3>Pending Products</h3>
   <div id="products">Loading...</div>
 </div>
@@ -15,17 +29,18 @@
 const API = "https://webmarket-2.onrender.com";
 const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-// BLOCK anyone who is not wmarket675@gmail.com
-if(!user.email || user.email!== 'wmarket675@gmail.com'){
-  alert('Access Denied: Only wmarket675@gmail.com can access admin');
+// HARD BLOCK - Only wmarket675@gmail.com can access
+if(!user.email || user.email !== 'wmarket675@gmail.com'){
+  alert('Access Denied');
   window.location.href = '/login.html';
 }
 
 async function loadProducts(){
   const res = await fetch(API + '/api/admin/products?email=' + user.email);
   const products = await res.json();
-  if(products.error) return document.getElementById('products').innerHTML = products.error;
+  if(products.error) return document.getElementById('products').innerHTML = `<p style="color:red">${products.error}</p>`;
   if(products.length === 0) return document.getElementById('products').innerHTML = '<p>No pending products</p>';
+  
   document.getElementById('products').innerHTML = products.map(p => `
     <div class="product">
       <h3>${p.product_name} - $${p.price} USDT</h3>
@@ -48,7 +63,11 @@ async function approve(id, action, seller_email, product_name){
   loadProducts();
 }
 
-function logout(){ localStorage.removeItem('user'); window.location.href = '/login.html' }
+function logout(){ 
+  localStorage.removeItem('user'); 
+  window.location.href = '/login.html' 
+}
+
 loadProducts();
 </script>
 </body>
