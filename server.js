@@ -1,6 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
@@ -8,40 +8,19 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-mongoose.connect(process.env.MONGO_URL);
+// CONNECT SUPABASE
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-// MODELS
-const User = mongoose.model('User', {
-  email:String, phrase:String, sellerId:String,
-  status:{type:String, default:"trial"},
-  planEnd:{type:Number, default: () => Date.now() + 7*24*60*60*1000}, // 7 day trial
-  createdAt:{type:Number, default:Date.now()}
-});
-
-const Listing = mongoose.model('Listing', {
-  sellerEmail:String, sellerId:String, name:String, desc:String,
-  price:String, region:String, email:String, whatsapp:String, telegram:String,
-  status:{type:String, default:"pending"}, createdAt:{type:Number, default:Date.now()}
-});
-
-const Payment = mongoose.model('Payment', {
-  email:String, sellerId:String, txid:String, amount:String,
-  duration:String, status:{type:String, default:"pending"}, createdAt:{type:Number, default:Date.now()}
-});
-
-// EMAIL SETUP - Uses your Gmail App Password
+// EMAIL SETUP
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.ADMIN_EMAIL, pass: process.env.ADMIN_PASS }
 });
-
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
-// HELPER: SEND EMAIL TO SELLER
 async function sendSellerEmail(to, subject, text){
-  try{
-    await transporter.sendMail({ from: `WebMarket <${ADMIN_EMAIL}>`, to, subject, text });
-  }catch(e){ console.log("Email error:", e) }
+  try{ await transporter.sendMail({ from: `WebMarket <${ADMIN_EMAIL}>`, to, subject, text }); }
+  catch(e){ console.log("Email error:", e) }
 }
 
 // LOGIN / REGISTER
@@ -49,33 +28,35 @@ app.post('/api/login', async (req,res)=>{
   let {email, phrase} = req.body;
   if(!email || phrase.split(" ").length!= 3) return res.json({error:"Need valid email + 3 word phrase"});
 
-  let user = await User.findOne({email});
+  let {data: user} = await supabase.from('users').select('*').eq('email', email).single();
   if(!user){
-    user = new User({
+    user = {
       email, phrase,
       sellerId: "WM"+Math.floor(1000+Math.random()*9000),
-    });
-    await user.save();
+      status: "trial",
+      planEnd: Date.now() + 7*24*60*60*1000,
+      createdAt: Date.now()
+    };
+    await supabase.from('users').insert([user]);
   }
   res.json(user);
 });
 
-// GET USER DATA
+// GET USER
 app.get('/api/user', async (req,res)=>{
-  let user = await User.findOne({email:req.query.email});
+  let {data: user} = await supabase.from('users').select('*').eq('email', req.query.email).single();
   res.json(user);
 });
 
 // SUBMIT PAYMENT
 app.post('/api/payment', async (req,res)=>{
   let {email, sellerId, txid, amount, duration} = req.body;
-  await new Payment({email, sellerId, txid, amount, duration}).save();
+  await supabase.from('payments').insert([{email, sellerId, txid, amount, duration, status:"pending", createdAt:Date.now()}]);
 
-  // Email you
-  transporter.sendMail({
-    to: ADMIN_EMAIL,
-    subject: `New WebMarket Payment: ${sellerId}`,
-    text: `Email: ${email}\nSellerID: ${sellerId}\nAmount: ${amount}\nDuration: ${duration}\nTxID: ${txid}`
+  transporter.sendMail({ 
+    to: ADMIN_EMAIL, 
+    subject: `New Payment: ${sellerId}`, 
+    text: `Email: ${email}\nSellerID: ${sellerId}\nAmount: ${amount}\nDuration: ${duration}\nTxID: ${txid}` 
   });
   res.json({ok:true});
 });
@@ -84,89 +65,70 @@ app.post('/api/payment', async (req,res)=>{
 app.post('/api/admin/approve', async (req,res)=>{
   if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
   let {email, duration} = req.body;
-
   let months = { "1m":1, "3m":3, "5m":5, "1y":12 }[duration];
   let newEnd = Date.now() + months*30*24*60*60*1000;
 
-  await User.updateOne({email}, {status:"active", planEnd:newEnd});
-  await Payment.updateOne({email, status:"pending"}, {status:"approved"});
+  await supabase.from('users').update({status:"active", planEnd:newEnd}).eq('email', email);
+  await supabase.from('payments').update({status:"approved"}).eq('email', email).eq('status','pending');
 
-  // AUTO EMAIL TO SELLER
-  sendSellerEmail(email, "WebMarket: Payment Approved ✅", 
-    `Your payment for ${duration} is approved!\n\nYou can now post listings.\nSeller ID: ${email.split('@')[0]}\nPlan ends: ${new Date(newEnd).toDateString()}\n\nLogin: https://your-site.onrender.com`);
-
+  sendSellerEmail(email, "WebMarket: Payment Approved ✅", `Your ${duration} plan is active. Plan ends: ${new Date(newEnd).toDateString()}`);
   res.json({ok:true});
 });
 
-// ADMIN REJECT PAYMENT - NEW
+// ADMIN REJECT PAYMENT
 app.post('/api/admin/reject', async (req,res)=>{
   if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let {email, reason} = req.body;
-
-  await Payment.updateOne({email, status:"pending"}, {status:"rejected"});
-
-  // AUTO EMAIL TO SELLER
-  sendSellerEmail(email, "WebMarket: Payment Rejected", 
-    `Your payment was rejected.\n\nReason: ${reason || "TxID not found"}\n\nPlease send correct payment and submit again.\nWallet: ${process.env.WALLET}`);
-
+  await supabase.from('payments').update({status:"rejected"}).eq('email', req.body.email).eq('status','pending');
+  sendSellerEmail(req.body.email, "WebMarket: Payment Rejected", `Reason: ${req.body.reason || "TxID not found"}\nWallet: ${process.env.WALLET}`);
   res.json({ok:true});
 });
 
-// GET PENDING PAYMENTS FOR ADMIN
+// GET PENDING PAYMENTS
 app.get('/api/admin/payments', async (req,res)=>{
   if(req.query.pass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let payments = await Payment.find({status:"pending"}).sort({createdAt:-1});
-  res.json(payments);
+  let {data} = await supabase.from('payments').select('*').eq('status','pending').order('createdAt', {ascending:false});
+  res.json(data);
 });
 
-// GET PENDING LISTINGS FOR ADMIN
+// GET PENDING LISTINGS
 app.get('/api/admin/listings', async (req,res)=>{
   if(req.query.pass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let listings = await Listing.find({status:"pending"}).sort({createdAt:-1});
-  res.json(listings);
+  let {data} = await supabase.from('listings').select('*').eq('status','pending').order('createdAt', {ascending:false});
+  res.json(data);
 });
 
-// ADMIN APPROVE LISTING
+// APPROVE LISTING
 app.post('/api/admin/approveListing', async (req,res)=>{
   if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let listing = await Listing.findById(req.body.id);
-  await Listing.updateOne({_id:req.body.id}, {status:"approved"});
-
-  // AUTO EMAIL TO SELLER
-  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Approved ✅", 
-    `Your listing "${listing.name}" is now LIVE on WebMarket.\n\nView it here: https://your-site.onrender.com`);
-
+  let {data:listing} = await supabase.from('listings').select('*').eq('id', req.body.id).single();
+  await supabase.from('listings').update({status:"approved"}).eq('id', req.body.id);
+  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Approved ✅", `Your listing "${listing.name}" is now LIVE.`);
   res.json({ok:true});
 });
 
-// ADMIN REJECT LISTING - NEW
+// REJECT LISTING
 app.post('/api/admin/rejectListing', async (req,res)=>{
   if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let {id, reason} = req.body;
-  let listing = await Listing.findById(id);
-  await Listing.updateOne({_id:id}, {status:"rejected"});
-
-  // AUTO EMAIL TO SELLER
-  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Rejected", 
-    `Your listing "${listing.name}" was rejected.\n\nReason: ${reason || "Does not follow rules"}\n\nPlease edit and submit again.`);
-
+  let {data:listing} = await supabase.from('listings').select('*').eq('id', req.body.id).single();
+  await supabase.from('listings').update({status:"rejected"}).eq('id', req.body.id);
+  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Rejected", `Reason: ${req.body.reason || "Does not follow rules"}`);
   res.json({ok:true});
 });
 
 // POST LISTING
 app.post('/api/post', async (req,res)=>{
-  let user = await User.findOne({email:req.body.sellerEmail});
+  let {data: user} = await supabase.from('users').select('*').eq('email', req.body.sellerEmail).single();
   if(!user) return res.json({error:"User not found"});
   if(user.status!="active" && Date.now() > user.planEnd) return res.json({error:"Plan expired. Please upgrade."});
 
-  await new Listing(req.body).save();
+  await supabase.from('listings').insert([{...req.body, status:"pending", createdAt:Date.now()}]);
   res.json({ok:true});
 });
 
 // GET APPROVED LISTINGS
 app.get('/api/listings', async (req,res)=>{
-  let listings = await Listing.find({status:"approved"}).sort({createdAt:-1});
-  res.json(listings);
+  let {data} = await supabase.from('listings').select('*').eq('status','approved').order('createdAt', {ascending:false});
+  res.json(data);
 });
 
 const PORT = process.env.PORT || 10000;
