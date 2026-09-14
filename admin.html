@@ -1,164 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WebMarket Admin</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{background:#0a0a0a; color:#fff; font-family:Arial; margin:0; padding:20px}
-h1{color:#25D366}
-.box{background:#161616; padding:20px; border-radius:10px; margin:15px 0}
-input,button,textarea{padding:12px; margin:5px; background:#1a1a1a; border:1px solid #333; border-radius:6px; color:#fff}
-button{background:#25D366; border:0; font-weight:bold; cursor:pointer}
-button.danger{background:#ff3333}
-table{width:100%; border-collapse:collapse; margin-top:10px}
-th,td{border:1px solid #333; padding:10px; text-align:left; vertical-align:top}
-th{background:#222}
-a{color:#25D366; word-break:break-all}
-#content{display:none}
-.tab{cursor:pointer; padding:10px 20px; background:#222; display:inline-block; margin-right:5px; border-radius:6px 6px 0 0}
-.tab.active{background:#25D366; color:#000}
-.tabContent{display:none}
+  body{font-family:Arial;margin:0;padding:20px;background:#f4f4f4}
+  .container{max-width:900px;margin:auto;background:#fff;padding:20px;border-radius:10px}
+  input,button{padding:10px;margin:5px;border:1px solid #ccc;border-radius:5px}
+  button{cursor:pointer}
+  .approve{background:#28a745;color:#fff;border:none}
+  .reject{background:#dc3545;color:#fff;border:none}
+  .product{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:5px}
 </style>
 </head>
 <body>
-
-<h1>WebMarket Admin Panel</h1>
-
-<div id="loginBox" class="box">
-  <h3>Admin Login</h3>
-  <input id="adminPass" type="password" placeholder="Enter Admin Password">
-  <button onclick="login()">Login</button>
-</div>
-
-<div id="content">
-  <div>
-    <div class="tab active" onclick="showTab('paymentsTab', this)">Pending Payments</div>
-    <div class="tab" onclick="showTab('listingsTab', this)">Pending Listings</div>
+<div class="container">
+  <h2>Admin Login</h2>
+  <div id="login">
+    <input type="email" id="email" placeholder="Admin Email">
+    <input type="password" id="password" placeholder="Admin Password">
+    <button onclick="login()">Login</button>
   </div>
 
-  <div id="paymentsTab" class="tabContent" style="display:block">
-    <h2>Pending Payments</h2>
-    <div id="payments">Loading...</div>
-  </div>
-
-  <div id="listingsTab" class="tabContent">
-    <h2>Pending Listings</h2>
-    <div id="listings">Loading...</div>
+  <div id="panel" style="display:none">
+    <h2>Pending Products</h2>
+    <button onclick="loadProducts()">Refresh</button>
+    <div id="products"></div>
   </div>
 </div>
 
 <script>
-const API = "https://YOUR-RENDER-BACKEND.onrender.com"; // CHANGE THIS
-let pass = "";
+const API = "YOUR-RENDER-URL"; // <-- CHANGE THIS
 
-function showTab(id, el){
-  document.querySelectorAll('.tabContent').forEach(t=>t.style.display='none');
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById(id).style.display='block';
-  el.classList.add('active');
-}
-
-function login(){
-  pass = adminPass.value;
-  if(!pass) return alert("Enter password");
-  document.getElementById('loginBox').style.display="none";
-  document.getElementById('content').style.display="block";
-  loadPayments();
-  loadListings();
-}
-
-async function loadPayments(){
-  let res = await fetch(API+"/api/admin/payments?pass="+pass);
-  let data = await res.json();
-  if(data.error) return alert("Wrong password");
-
-  if(data.length==0) payments.innerHTML = "No pending payments";
-  else payments.innerHTML = `
-    <table>
-      <tr><th>Date</th><th>Email</th><th>SellerID</th><th>Amount</th><th>Duration</th><th>TxID</th><th>Action</th></tr>
-      ${data.map(p=>`
-        <tr>
-          <td>${new Date(p.createdAt).toLocaleString()}</td>
-          <td>${p.email}</td>
-          <td><b>${p.sellerId}</b></td>
-          <td>${p.amount}</td>
-          <td>${p.duration}</td>
-          <td><a href="https://tronscan.org/#/transaction/${p.txid}" target="_blank">${p.txid.slice(0,12)}...</a></td>
-          <td>
-            <button onclick="approvePayment('${p.email}','${p.duration}')">Approve</button>
-            <button class="danger" onclick="rejectPayment('${p.email}')">Reject</button>
-          </td>
-        </tr>
-      `).join('')}
-    </table>
-  `;
-}
-
-async function approvePayment(email, duration){
-  if(!confirm(`Approve ${email} for ${duration}?`)) return;
-  await fetch(API+"/api/admin/approve", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email, duration, adminPass:pass})
+async function login(){
+  const res = await fetch(API + '/api/admin/login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value
+    })
   });
-  alert("Approved! Email sent to seller.");
-  loadPayments();
+  const data = await res.json();
+  if(data.success){
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    loadProducts();
+  } else alert('Login failed');
 }
 
-async function rejectPayment(email){
-  let reason = prompt("Reason for rejection:", "TxID not found");
-  if(reason==null) return;
-  await fetch(API+"/api/admin/reject", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email, reason, adminPass:pass})
+async function loadProducts(){
+  const res = await fetch(API + '/api/admin/products');
+  const products = await res.json();
+  document.getElementById('products').innerHTML = products.map(p => `
+    <div class="product">
+      <h3>${p.product_name} - $${p.price}</h3>
+      <p>${p.description}</p>
+      <p><b>Seller:</b> ${p.seller_email}</p>
+      <p><b>Proof:</b> ${p.payment_proof}</p>
+      <button class="approve" onclick="approve(${p.id}, 'approve', '${p.seller_email}', '${p.product_name}')">Approve</button>
+      <button class="reject" onclick="approve(${p.id}, 'reject', '${p.seller_email}', '${p.product_name}')">Reject</button>
+    </div>
+  `).join('');
+}
+
+async function approve(id, action, seller_email, product_name){
+  await fetch(API + '/api/admin/approve', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id, action, seller_email, product_name})
   });
-  alert("Rejected! Email sent to seller.");
-  loadPayments();
-}
-
-async function loadListings(){
-  let res = await fetch(API+"/api/admin/listings?pass="+pass);
-  let data = await res.json();
-
-  if(data.length==0) listings.innerHTML = "No pending listings";
-  else listings.innerHTML = `
-    <table>
-      <tr><th>Date</th><th>Seller</th><th>Name</th><th>Price</th><th>Region</th><th>Contact</th><th>Action</th></tr>
-      ${data.map(l=>`
-        <tr>
-          <td>${new Date(l.createdAt).toLocaleString()}</td>
-          <td>${l.sellerId}<br><small>${l.sellerEmail}</small></td>
-          <td><b>${l.name}</b><br><small>${l.description}</small></td>
-          <td>${l.price}</td>
-          <td>${l.region}</td>
-          <td>Email: ${l.email}<br>WA: ${l.whatsapp}<br>TG: ${l.telegram}</td>
-          <td>
-            <button onclick="approveListing(${l.id})">Approve</button>
-            <button class="danger" onclick="rejectListing(${l.id})">Reject</button>
-          </td>
-        </tr>
-      `).join('')}
-    </table>
-  `;
-}
-
-async function approveListing(id){
-  await fetch(API+"/api/admin/approveListing", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({id, adminPass:pass})
-  });
-  alert("Listing Approved! Email sent to seller.");
-  loadListings();
-}
-
-async function rejectListing(id){
-  let reason = prompt("Reason for rejection:", "Spam / Wrong category");
-  if(reason==null) return;
-  await fetch(API+"/api/admin/rejectListing", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({id, reason, adminPass:pass})
-  });
-  alert("Listing Rejected! Email sent to seller.");
-  loadListings();
+  alert('Done! Email sent to seller.');
+  loadProducts();
 }
 </script>
 </body>
