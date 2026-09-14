@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WebMarket Login</title>
+<style>
+  body{font-family:Arial;background:#f4f4f4;display:flex;justify-content:center;align-items:center;height:100vh}
+.box{background:#fff;padding:30px;border-radius:10px;width:350px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
+  input,button{width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:5px;box-sizing:border-box}
+  button{background:#28a745;color:#fff;border:none;cursor:pointer;font-weight:bold}
+.tab{display:flex;gap:10px;margin-bottom:15px}
+.tab button{background:#ddd;color:#000}
+.tab button.active{background:#28a745;color:#fff}
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>WebMarket Access</h2>
+  <div class="tab">
+    <button id="loginTab" class="active" onclick="showTab('login')">Login</button>
+    <button id="signupTab" onclick="showTab('signup')">Signup</button>
+  </div>
+
+  <div id="loginForm">
+    <input type="email" id="loginEmail" placeholder="Email">
+    <input type="text" id="loginPass" placeholder="3 Word Phrase">
+    <button onclick="login()">Login</button>
+  </div>
+
+  <div id="signupForm" style="display:none">
+    <input type="email" id="signupEmail" placeholder="Email">
+    <input type="text" id="signupPass" placeholder="Create 3 Word Phrase">
+    <small>Remember this 3 word phrase. You need it to login</small>
+    <button onclick="signup()">Sign Up</button>
+  </div>
+  <p id="msg" style="color:red"></p>
+</div>
+
+<script>
+const API = "https://webmarket-2.onrender.com";
+
+function showTab(tab){
+  document.getElementById('loginForm').style.display = tab==='login'?'block':'none';
+  document.getElementById('signupForm').style.display = tab==='signup'?'block':'none';
+  document.getElementById('loginTab').classList.toggle('active', tab==='login');
+  document.getElementById('signupTab').classList.toggle('active', tab==='signup');
+}
+
+async function signup(){
+  const res = await fetch(API + '/api/signup', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      email: document.getElementById('signupEmail').value,
+      password: document.getElementById('signupPass').value
+    })
+  });
+  const data = await res.json();
+  if(data.success){ alert('Account created! Login now'); showTab('login') }
+  else document.getElementById('msg').innerText = data.error;
+}
+
+async function login(){
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPass').value;
+  const res = await fetch(API + '/api/login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, password})
+  });
+  const data = await res.json();
+  if(data.success){
+    localStorage.setItem('user', JSON.stringify({email, password}));
+    if(data.isAdmin) window.location.href = '/admin.html';
+    else window.location.href = '/';
+  } else document.getElementById('msg').innerText = data.error;
+}
+</script>
+</body>
+</html>
