@@ -14,13 +14,14 @@ mongoose.connect(process.env.MONGO_URL);
 const User = mongoose.model('User', {
   email:String, phrase:String, sellerId:String,
   status:{type:String, default:"trial"},
-  planEnd:Number, createdAt:{type:Number, default:Date.now()}
+  planEnd:{type:Number, default: () => Date.now() + 7*24*60*60*1000}, // 7 day trial
+  createdAt:{type:Number, default:Date.now()}
 });
 
 const Listing = mongoose.model('Listing', {
   sellerEmail:String, sellerId:String, name:String, desc:String,
   price:String, region:String, email:String, whatsapp:String, telegram:String,
-  status:{type:String, default:"pending"}
+  status:{type:String, default:"pending"}, createdAt:{type:Number, default:Date.now()}
 });
 
 const Payment = mongoose.model('Payment', {
@@ -28,26 +29,31 @@ const Payment = mongoose.model('Payment', {
   duration:String, status:{type:String, default:"pending"}, createdAt:{type:Number, default:Date.now()}
 });
 
-// EMAIL SETUP - use gmail app password
+// EMAIL SETUP - Uses your Gmail App Password
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.ADMIN_EMAIL, pass: process.env.ADMIN_PASS }
 });
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const WALLET = process.env.WALLET;
+
+// HELPER: SEND EMAIL TO SELLER
+async function sendSellerEmail(to, subject, text){
+  try{
+    await transporter.sendMail({ from: `WebMarket <${ADMIN_EMAIL}>`, to, subject, text });
+  }catch(e){ console.log("Email error:", e) }
+}
 
 // LOGIN / REGISTER
 app.post('/api/login', async (req,res)=>{
   let {email, phrase} = req.body;
-  if(phrase.split(" ").length!= 3) return res.json({error:"Need 3 words"});
+  if(!email || phrase.split(" ").length!= 3) return res.json({error:"Need valid email + 3 word phrase"});
 
   let user = await User.findOne({email});
   if(!user){
     user = new User({
       email, phrase,
       sellerId: "WM"+Math.floor(1000+Math.random()*9000),
-      planEnd: Date.now() + 7*24*60*60*1000
     });
     await user.save();
   }
@@ -74,7 +80,7 @@ app.post('/api/payment', async (req,res)=>{
   res.json({ok:true});
 });
 
-// ADMIN APPROVE
+// ADMIN APPROVE PAYMENT
 app.post('/api/admin/approve', async (req,res)=>{
   if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
   let {email, duration} = req.body;
@@ -84,20 +90,74 @@ app.post('/api/admin/approve', async (req,res)=>{
 
   await User.updateOne({email}, {status:"active", planEnd:newEnd});
   await Payment.updateOne({email, status:"pending"}, {status:"approved"});
+
+  // AUTO EMAIL TO SELLER
+  sendSellerEmail(email, "WebMarket: Payment Approved ✅", 
+    `Your payment for ${duration} is approved!\n\nYou can now post listings.\nSeller ID: ${email.split('@')[0]}\nPlan ends: ${new Date(newEnd).toDateString()}\n\nLogin: https://your-site.onrender.com`);
+
+  res.json({ok:true});
+});
+
+// ADMIN REJECT PAYMENT - NEW
+app.post('/api/admin/reject', async (req,res)=>{
+  if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
+  let {email, reason} = req.body;
+
+  await Payment.updateOne({email, status:"pending"}, {status:"rejected"});
+
+  // AUTO EMAIL TO SELLER
+  sendSellerEmail(email, "WebMarket: Payment Rejected", 
+    `Your payment was rejected.\n\nReason: ${reason || "TxID not found"}\n\nPlease send correct payment and submit again.\nWallet: ${process.env.WALLET}`);
+
   res.json({ok:true});
 });
 
 // GET PENDING PAYMENTS FOR ADMIN
 app.get('/api/admin/payments', async (req,res)=>{
   if(req.query.pass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  let payments = await Payment.find({status:"pending"});
+  let payments = await Payment.find({status:"pending"}).sort({createdAt:-1});
   res.json(payments);
+});
+
+// GET PENDING LISTINGS FOR ADMIN
+app.get('/api/admin/listings', async (req,res)=>{
+  if(req.query.pass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
+  let listings = await Listing.find({status:"pending"}).sort({createdAt:-1});
+  res.json(listings);
+});
+
+// ADMIN APPROVE LISTING
+app.post('/api/admin/approveListing', async (req,res)=>{
+  if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
+  let listing = await Listing.findById(req.body.id);
+  await Listing.updateOne({_id:req.body.id}, {status:"approved"});
+
+  // AUTO EMAIL TO SELLER
+  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Approved ✅", 
+    `Your listing "${listing.name}" is now LIVE on WebMarket.\n\nView it here: https://your-site.onrender.com`);
+
+  res.json({ok:true});
+});
+
+// ADMIN REJECT LISTING - NEW
+app.post('/api/admin/rejectListing', async (req,res)=>{
+  if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
+  let {id, reason} = req.body;
+  let listing = await Listing.findById(id);
+  await Listing.updateOne({_id:id}, {status:"rejected"});
+
+  // AUTO EMAIL TO SELLER
+  sendSellerEmail(listing.sellerEmail, "WebMarket: Listing Rejected", 
+    `Your listing "${listing.name}" was rejected.\n\nReason: ${reason || "Does not follow rules"}\n\nPlease edit and submit again.`);
+
+  res.json({ok:true});
 });
 
 // POST LISTING
 app.post('/api/post', async (req,res)=>{
   let user = await User.findOne({email:req.body.sellerEmail});
-  if(user.status!="active" && Date.now() > user.planEnd) return res.json({error:"Plan expired"});
+  if(!user) return res.json({error:"User not found"});
+  if(user.status!="active" && Date.now() > user.planEnd) return res.json({error:"Plan expired. Please upgrade."});
 
   await new Listing(req.body).save();
   res.json({ok:true});
@@ -105,15 +165,9 @@ app.post('/api/post', async (req,res)=>{
 
 // GET APPROVED LISTINGS
 app.get('/api/listings', async (req,res)=>{
-  let listings = await Listing.find({status:"approved"});
+  let listings = await Listing.find({status:"approved"}).sort({createdAt:-1});
   res.json(listings);
 });
 
-// ADMIN APPROVE LISTING
-app.post('/api/admin/approveListing', async (req,res)=>{
-  if(req.body.adminPass!= process.env.ADMIN_PASS) return res.json({error:"Wrong pass"});
-  await Listing.updateOne({_id:req.body.id}, {status:"approved"});
-  res.json({ok:true});
-});
-
-app.listen(10000, ()=>console.log("Server running"));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, ()=>console.log("Server running on "+PORT));
