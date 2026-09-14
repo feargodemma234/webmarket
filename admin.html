@@ -2,36 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WebMarket Admin</title>
 <style>
-  body{font-family:Arial;margin:0;padding:20px;background:#f4f4f4}
-  .container{max-width:900px;margin:auto;background:#fff;padding:20px;border-radius:10px}
-  input,button{padding:10px;margin:5px;border:1px solid #ccc;border-radius:5px}
-  button{cursor:pointer}
-  .approve{background:#28a745;color:#fff;border:none}
-  .reject{background:#dc3545;color:#fff;border:none}
-  .product{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:5px}
+  body{font-family:Arial;margin:0;background:#f4f4f4}
+  header{background:#dc3545;color:#fff;padding:15px}
+ .container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:10px}
+  input,button{padding:10px;margin:5px;border:1px solid #ccc;border-radius:5px;width:100%;box-sizing:border-box}
+  button{cursor:pointer;font-weight:bold}
+ .approve{background:#28a745;color:#fff;border:none}
+ .reject{background:#dc3545;color:#fff;border:none}
+ .product{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:5px}
 </style>
 </head>
 <body>
+<header><h2>WebMarket Admin Panel</h2></header>
 <div class="container">
-  <h2>Admin Login</h2>
   <div id="login">
-    <input type="email" id="email" placeholder="Admin Email">
-    <input type="password" id="password" placeholder="Admin Password">
+    <h3>Admin Login</h3>
+    <p>Access restricted to: <b>wmarket675@gmail.com</b></p>
+    <input type="email" id="email" placeholder="Admin Email" value="wmarket675@gmail.com" readonly>
+    <input type="text" id="password" placeholder="Enter 3 Word Phrase" >
     <button onclick="login()">Login</button>
+    <p id="loginError" style="color:red"></p>
   </div>
 
   <div id="panel" style="display:none">
-    <h2>Pending Products</h2>
+    <h3>Pending Products</h3>
     <button onclick="loadProducts()">Refresh</button>
     <div id="products"></div>
   </div>
 </div>
 
 <script>
-const API = "YOUR-RENDER-URL"; // <-- CHANGE THIS
+const API = "YOUR-RENDER-URL"; // <-- CHANGE TO https://webmarket-1.onrender.com
 
 async function login(){
   const res = await fetch(API + '/api/admin/login', {
@@ -44,21 +47,23 @@ async function login(){
   });
   const data = await res.json();
   if(data.success){
+    localStorage.setItem('admin', 'true');
     document.getElementById('login').style.display = 'none';
     document.getElementById('panel').style.display = 'block';
     loadProducts();
-  } else alert('Login failed');
+  } else document.getElementById('loginError').innerText = data.error;
 }
 
 async function loadProducts(){
   const res = await fetch(API + '/api/admin/products');
   const products = await res.json();
+  if(products.length === 0) return document.getElementById('products').innerHTML = '<p>No pending products</p>';
   document.getElementById('products').innerHTML = products.map(p => `
     <div class="product">
-      <h3>${p.product_name} - $${p.price}</h3>
+      <h3>${p.product_name} - $${p.price} USDT</h3>
       <p>${p.description}</p>
       <p><b>Seller:</b> ${p.seller_email}</p>
-      <p><b>Proof:</b> ${p.payment_proof}</p>
+      <p><b>TXID:</b> ${p.payment_proof}</p>
       <button class="approve" onclick="approve(${p.id}, 'approve', '${p.seller_email}', '${p.product_name}')">Approve</button>
       <button class="reject" onclick="approve(${p.id}, 'reject', '${p.seller_email}', '${p.product_name}')">Reject</button>
     </div>
@@ -74,6 +79,8 @@ async function approve(id, action, seller_email, product_name){
   alert('Done! Email sent to seller.');
   loadProducts();
 }
+
+if(localStorage.getItem('admin')){ document.getElementById('login').style.display = 'none'; document.getElementById('panel').style.display = 'block'; loadProducts(); }
 </script>
 </body>
 </html>
