@@ -1,61 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>WebMarket Admin</title>
-<style>
-  body{font-family:Arial;margin:0;background:#f4f4f4}
-  header{background:#dc3545;color:#fff;padding:15px}
- .container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:10px}
-  input,button{padding:10px;margin:5px;border:1px solid #ccc;border-radius:5px;width:100%;box-sizing:border-box}
-  button{cursor:pointer;font-weight:bold}
- .approve{background:#28a745;color:#fff;border:none}
- .reject{background:#dc3545;color:#fff;border:none}
- .product{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:5px}
-</style>
+<head><meta charset="UTF-8"><title>WebMarket Admin</title>
+<style>body{font-family:Arial;margin:0;background:#f4f4f4}header{background:#dc3545;color:#fff;padding:15px}.container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:10px}button{padding:10px;cursor:pointer;font-weight:bold}.approve{background:#28a745;color:#fff;border:none}.reject{background:#dc3545;color:#fff;border:none}.product{border:1px solid #ddd;padding:15px;margin:10px 0}</style>
 </head>
 <body>
 <header><h2>WebMarket Admin Panel</h2></header>
-<div class="container">
-  <div id="login">
-    <h3>Admin Login</h3>
-    <p>Access restricted to: <b>wmarket675@gmail.com</b></p>
-    <input type="email" id="email" placeholder="Admin Email" value="wmarket675@gmail.com" readonly>
-    <input type="text" id="password" placeholder="Enter 3 Word Phrase" >
-    <button onclick="login()">Login</button>
-    <p id="loginError" style="color:red"></p>
-  </div>
-  <div id="panel" style="display:none">
-    <h3>Pending Products</h3>
-    <button onclick="loadProducts()">Refresh</button>
-    <div id="products"></div>
-  </div>
+<div class="container" id="panel">
+  <button onclick="logout()">Logout</button>
+  <h3>Pending Products</h3>
+  <div id="products">Loading...</div>
 </div>
 
 <script>
-const API = "https://webmarket-2.onrender.com"; // FIXED
+const API = "https://webmarket-2.onrender.com";
+const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-async function login(){
-  const res = await fetch(API + '/api/admin/login', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value
-    })
-  });
-  const data = await res.json();
-  if(data.success){
-    localStorage.setItem('admin', 'true');
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('panel').style.display = 'block';
-    loadProducts();
-  } else document.getElementById('loginError').innerText = data.error;
+// BLOCK anyone who is not wmarket675@gmail.com
+if(!user.email || user.email!== 'wmarket675@gmail.com'){
+  alert('Access Denied: Only wmarket675@gmail.com can access admin');
+  window.location.href = '/login.html';
 }
 
 async function loadProducts(){
-  const res = await fetch(API + '/api/admin/products');
+  const res = await fetch(API + '/api/admin/products?email=' + user.email);
   const products = await res.json();
+  if(products.error) return document.getElementById('products').innerHTML = products.error;
   if(products.length === 0) return document.getElementById('products').innerHTML = '<p>No pending products</p>';
   document.getElementById('products').innerHTML = products.map(p => `
     <div class="product">
@@ -73,13 +42,14 @@ async function approve(id, action, seller_email, product_name){
   await fetch(API + '/api/admin/approve', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id, action, seller_email, product_name})
+    body: JSON.stringify({id, action, seller_email, product_name, admin_email: user.email})
   });
   alert('Done! Email sent to seller.');
   loadProducts();
 }
 
-if(localStorage.getItem('admin')){ document.getElementById('login').style.display = 'none'; document.getElementById('panel').style.display = 'block'; loadProducts(); }
+function logout(){ localStorage.removeItem('user'); window.location.href = '/login.html' }
+loadProducts();
 </script>
 </body>
 </html>
