@@ -3,57 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebMarket - Sell Your Products</title>
+<title>WebMarket - Buy Products</title>
 <style>
-  body{font-family:Arial;margin:0;padding:20px;background:#f4f4f4}
-  .container{max-width:600px;margin:auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
-  input,textarea,button{width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:5px}
-  button{background:#28a745;color:#fff;border:none;cursor:pointer;font-weight:bold}
-  button:hover{background:#218838}
-  .wallet{background:#e9ecef;padding:10px;border-radius:5px;text-align:center;font-weight:bold}
+  body{font-family:Arial;margin:0;background:#f4f4f4}
+  header{background:#28a745;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center}
+  header a{color:#fff;margin:0 10px;text-decoration:none;font-weight:bold}
+  .container{max-width:1200px;margin:20px auto;padding:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:20px}
+  .card{background:#fff;padding:15px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+  .card h3{margin:0 0 10px;color:#28a745}
+  .price{font-size:22px;font-weight:bold;color:#000}
+  .btn{display:block;text-align:center;background:#28a745;color:#fff;padding:10px;border-radius:5px;text-decoration:none;margin-top:10px}
+  .btn:hover{background:#218838}
 </style>
 </head>
 <body>
+<header>
+  <h1>WebMarket</h1>
+  <nav>
+    <a href="/">Shop</a>
+    <a href="/submit.html">Sell</a>
+    <a href="/admin.html">Admin</a>
+  </nav>
+</header>
+
 <div class="container">
-  <h2>Submit Product for Approval</h2>
-  <div class="wallet">Pay to this wallet: <span id="wallet">Loading...</span></div>
-  
-  <input type="text" id="product_name" placeholder="Product Name" required>
-  <textarea id="description" placeholder="Product Description" rows="4" required></textarea>
-  <input type="number" id="price" placeholder="Price in $" required>
-  <input type="email" id="seller_email" placeholder="Your Email" required>
-  <input type="text" id="payment_proof" placeholder="Payment Transaction ID / Proof" required>
-  
-  <button onclick="submitProduct()">Submit for Approval</button>
-  <p id="msg"></p>
+  <h2>Latest Products</h2>
+  <div class="grid" id="products">Loading...</div>
 </div>
 
 <script>
-const API = "YOUR-RENDER-URL"; // <-- CHANGE THIS
+const API = "YOUR-RENDER-URL"; // <-- CHANGE THIS TO https://webmarket-1.onrender.com
 
-// Load wallet from backend
-fetch(API + '/api/health').then(res => res.json()).then(data => {
-  document.getElementById('wallet').innerText = data.wallet;
-});
-
-async function submitProduct(){
-  const body = {
-    product_name: document.getElementById('product_name').value,
-    description: document.getElementById('description').value,
-    price: document.getElementById('price').value,
-    seller_email: document.getElementById('seller_email').value,
-    payment_proof: document.getElementById('payment_proof').value
-  };
+async function loadProducts(){
+  const res = await fetch(API + '/api/products');
+  const products = await res.json();
   
-  const res = await fetch(API + '/api/submit', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
+  if(products.length === 0){
+    document.getElementById('products').innerHTML = '<p>No products yet. <a href="/submit.html">Be the first to sell!</a></p>';
+    return;
+  }
   
-  const data = await res.json();
-  document.getElementById('msg').innerText = data.success ? 'Submitted! Wait for admin approval.' : 'Error: ' + data.error;
+  document.getElementById('products').innerHTML = products.map(p => `
+    <div class="card">
+      <h3>${p.product_name}</h3>
+      <p>${p.description}</p>
+      <p class="price">$${p.price}</p>
+      <p><b>Seller:</b> ${p.seller_email}</p>
+      <a href="mailto:${p.seller_email}?subject=Interested in ${p.product_name}" class="btn">Contact Seller</a>
+    </div>
+  `).join('');
 }
+loadProducts();
 </script>
 </body>
 </html>
