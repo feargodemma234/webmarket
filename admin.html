@@ -25,7 +25,6 @@
     <button onclick="login()">Login</button>
     <p id="loginError" style="color:red"></p>
   </div>
-
   <div id="panel" style="display:none">
     <h3>Pending Products</h3>
     <button onclick="loadProducts()">Refresh</button>
@@ -34,7 +33,7 @@
 </div>
 
 <script>
-const API = "YOUR-RENDER-URL"; // <-- CHANGE TO https://webmarket-1.onrender.com
+const API = "https://webmarket-2.onrender.com"; // FIXED
 
 async function login(){
   const res = await fetch(API + '/api/admin/login', {
