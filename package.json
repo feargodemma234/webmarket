@@ -1,7 +1,7 @@
 {
   "name": "webmarket-api",
   "version": "1.0.0",
-  "description": "WebMarket Backend API",
+  "description": "WebMarket Backend API - USDT TRON",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
